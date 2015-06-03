@@ -1,0 +1,38 @@
+
+LIBRARY     ExtIO_HackRF.DLL
+EXPORTS
+CloseHW 
+GetHWLO 
+GetHWSR 
+GetStatus
+InitHW 
+OpenHW 
+SetCallback 
+SetHWLO 
+ShowGUI 
+HideGUI
+SwitchGUI
+StartHW 
+StopHW
+
+; Samplerate / Bandwidth:
+    ExtIoGetSrates                 
+    ExtIoGetActualSrateIdx        
+    ExtIoSetSrate                 
+
+; Settings
+ ;   ExtIoGetSetting            
+ ;   ExtIoSetSetting               
+
+;    GetAttenuators               
+;    GetActualAttIdx               
+;    SetAttenuator                 
+	
+;	ExtIoGetAGCs                
+;	ExtIoGetActualAGCidx		  
+;	ExtIoSetAGC      
+
+; 64 Bit
+    SetHWLO64 
+    GetHWLO64
+            
