@@ -2,26 +2,22 @@
 
 
 
-
 #include "ExtIO_HackRF.h"
 #include "resource.h"
 //---------------------------------------------------------------------------
 // #define WIN32_LEAN_AND_MEAN             // Selten verwendete Teile der Windows-Header nicht einbinden.
 #include <windows.h>
 #include <windowsx.h>
-#include <string.h>
+#include <commctrl.h>
 #include <stdio.h>
-#include <math.h>
 #include <hackrf.h>
 #include <new>
-#include <process.h>
 #include <pthread.h>
 
 //---------------------------------------------------------------------------
 #define EXTIO_EXPORTS		1
 #define HWNAME				"ExtIO HackRF"
-#define HWMODEL				"ExtIO HackRF"
-#define SETTINGS_IDENTIFIER	"0.01"
+
 static hackrf_device *device;
 HWND h_dialog = NULL;
 int result;
@@ -80,15 +76,15 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 	unsigned char* char_ptr = transfer->buffer;
 
 	if (gbThreadRunning){
-	for (int i = 0; i < transfer->valid_length; i++)
-	{
-		(*short_ptr) = ((short)(*char_ptr));
-		char_ptr++;
-		short_ptr++;
-	}
-	pfnCallback(buffer_len, 0, 0, (void*)short_buf);
+		for (int i = 0; i < transfer->valid_length; i++)
+		{
+			(*short_ptr) = ((short)(*char_ptr)) << 8;
+			char_ptr++;
+			short_ptr++;
+		}
+		pfnCallback(buffer_len, 0, 0, (void*)short_buf);
 
-}
+	}
 	return 0;
 }
 
@@ -162,7 +158,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 }
 //---------------------------------------------------------------------
 static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam){
-	static HWND hGain;
 	static HBRUSH BRUSH_RED = CreateSolidBrush(RGB(255, 0, 0));
 	static HBRUSH BRUSH_GREEN = CreateSolidBrush(RGB(0, 255, 0));
 	switch (uMsg){
@@ -176,23 +171,57 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 						   }
 
 						   ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_SAMPLERATE), samplerate_default);
-						   ScrollBar_SetRange(GetDlgItem(hwndDlg, IDC_LNA), 0, 40, TRUE);
-						   ScrollBar_SetRange(GetDlgItem(hwndDlg, IDC_VGA), 0, 62, TRUE);
+
+						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMIN, FALSE, 0);
+						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMAX, FALSE, 40);
+						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETPOS, TRUE, (int)lna_gain);
+
+						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMIN, FALSE, 0);
+						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMAX, FALSE, 62);
+						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETPOS, TRUE, (int)vga_gain);
+
 						   return TRUE;
 	}
+	case WM_HSCROLL:
+		if (GetDlgItem(hwndDlg, IDC_LNA) == (HWND)lParam){
+			if (LOWORD(wParam) != TB_THUMBTRACK && LOWORD(wParam) != TB_ENDTRACK){
+				if (lna_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07)){
+					lna_gain = SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07;
+					wchar_t str[10];
+					_itow_s(lna_gain, str, 10, 10);
+					wcscat(str, TEXT(" dB"));
+					Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
+					if (device)hackrf_set_lna_gain(device, lna_gain);
+				}
+			}
+		}
+		if (GetDlgItem(hwndDlg, IDC_VGA) == (HWND)lParam){
+			if (LOWORD(wParam) != TB_THUMBTRACK && LOWORD(wParam) != TB_ENDTRACK)
+			{
+				if (vga_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07)){
+					vga_gain = SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_GETPOS, 0, NULL)& ~0x01;
+					wchar_t str[10];
+					_itow_s(vga_gain, str, 10, 10);
+					wcscat(str, TEXT(" dB"));
+					Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);
+					if (device)hackrf_set_lna_gain(device, vga_gain);
+				}
+			}
+		}
 
+		break;
 	case WM_COMMAND:
 		switch (GET_WM_COMMAND_ID(wParam, lParam)){
-		case IDC_SAMPLERATE:
-			if (GET_WM_COMMAND_CMD(wParam, lParam) == CBN_SELCHANGE)
-			{
-				gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
-				hackrf_set_sample_rate(device, gExtSampleRate);
-				pfnCallback(-1, extHw_Changed_SampleRate, 0, NULL);
+		case IDC_SAMPLERATE:{
+								if (GET_WM_COMMAND_CMD(wParam, lParam) == CBN_SELCHANGE)
+								{
+									gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
+									hackrf_set_sample_rate(device, gExtSampleRate);
+									pfnCallback(-1, extHw_Changed_SampleRate, 0, NULL);
 
-			}
-			return TRUE;
-
+								}
+								return TRUE;
+		}
 
 
 		}
@@ -272,9 +301,9 @@ bool EXTIO_API OpenHW(void)
 	buffer_len = BUF_LEN;
 	short_buf = new (std::nothrow) short[buffer_len];
 
-	result=hackrf_set_lna_gain(device, lna_gain);
-	result|=hackrf_set_vga_gain(device, vga_gain);
-	result|= hackrf_start_rx(device, hackrf_rx_callback, NULL);
+	result = hackrf_set_lna_gain(device, lna_gain);
+	result |= hackrf_set_vga_gain(device, vga_gain);
+	result |= hackrf_start_rx(device, hackrf_rx_callback, NULL);
 	if (result != HACKRF_SUCCESS) {
 		MessageBox(NULL, TEXT("hackrf_start_rx Failed"), NULL, MB_OK);
 		delete short_buf;
@@ -353,7 +382,7 @@ int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 //---------------------------------------------------------------------------
 extern "C"
 void EXTIO_API StopHW(void)
-{	
+{
 	gbThreadRunning = FALSE;
 
 }
@@ -382,7 +411,7 @@ int64_t  EXTIO_API SetHWLO64(int64_t LOfreq)
 	int64_t ret = 0;
 	if (LOfreq < FREQ_MIN_HZ){
 		glLOfreq = FREQ_MIN_HZ;
-			ret = -1*(FREQ_MIN_HZ);
+		ret = -1 * (FREQ_MIN_HZ);
 	}
 
 	if (LOfreq > FREQ_MAX_HZ){
@@ -396,17 +425,14 @@ int64_t  EXTIO_API SetHWLO64(int64_t LOfreq)
 		if (result = HACKRF_SUCCESS){
 			pfnCallback(-1, extHw_Changed_LO, 0, NULL);
 		}
-	
-	if (result != HACKRF_SUCCESS)
-	{
-		MessageBox(NULL, TEXT("hackrf_set_freq Failed"), NULL, MB_OK);
-	}
+
+		if (result != HACKRF_SUCCESS)
+		{
+			MessageBox(NULL, TEXT("hackrf_set_freq Failed"), NULL, MB_OK);
+		}
 	}
 	return ret;
 }
-
-
-
 
 
 
@@ -414,7 +440,7 @@ int64_t  EXTIO_API SetHWLO64(int64_t LOfreq)
 extern "C"
 int  EXTIO_API GetStatus(void)
 {
-	return 0;  
+	return 0;
 }
 
 //---------------------------------------------------------------------------
@@ -443,7 +469,6 @@ long EXTIO_API GetHWLO(void)
 extern "C"
 long EXTIO_API GetHWSR(void)
 {
-	// This DLL controls just an oscillator, not a digitizer
 	return gExtSampleRate;
 }
 
@@ -533,11 +558,6 @@ int EXTIO_API ExtIoGetSrates(int srate_idx, double * samplerate)
 extern "C"
 int  EXTIO_API ExtIoGetActualSrateIdx(void)
 {
-	//MessageBox(NULL, TEXT("ExtIoGetActualSrateIdx"),NULL, MB_OK);
-	//						TCHAR str[255];
-	//						_stprintf(str, TEXT("Actual SR idx %d"), ComboBox_GetCurSel(GetDlgItem(h_dialog,IDC_SAMPLERATE)));
-	//						MessageBox(NULL, str, NULL, MB_OK);
-	//	return  ComboBox_GetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE));
 	return  ComboBox_GetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE));
 }
 
@@ -547,10 +567,8 @@ int  EXTIO_API ExtIoSetSrate(int srate_idx)
 {
 	if (srate_idx >= 0 && srate_idx < (sizeof(samplerates) / sizeof(samplerates[0])))
 	{
-		//		
 		gExtSampleRate = samplerates[srate_idx].value;
 		hackrf_set_sample_rate(device, gExtSampleRate);
-		//hackrf_set_sample_rate_manual(device, gExtSampleRate, 1);
 		ComboBox_SetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE), srate_idx);
 		pfnCallback(-1, extHw_Changed_SampleRate, 0, NULL);// Signal application
 		return 0;
@@ -562,26 +580,7 @@ int  EXTIO_API ExtIoSetSrate(int srate_idx)
 	return 1;	// ERROR
 }
 
-//extern "C"
-//long EXTIO_API ExtIoGetBandwidth(int srate_idx)
-//{
-//	double newSrate = 0.0;
-//	long ret = -1L;
-//	if (0 == ExtIoGetSrates(srate_idx, &newSrate))
-//	{
-//		switch (srate_idx)
-//		{
-//		case 0:		ret = 40000L;	break;
-//		case 1:		ret = 80000L;	break;
-//		case 2:		ret = 160000L;	break;
-//		default:	ret = -1L;		break;
-//		}
-//		return (ret >= newSrate || ret <= 0L) ? -1L : ret;
-//	}
-//	return -1L;	// ERROR
-//}
 
-//---------------------------------------------------------------------------
 
 extern "C"
 int  EXTIO_API ExtIoGetSetting(int idx, char * description, char * value)
@@ -613,5 +612,3 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 
 	}
 }
-
-//---------------------------------------------------------------------------
