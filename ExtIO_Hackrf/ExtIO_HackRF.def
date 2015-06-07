@@ -21,8 +21,8 @@ StopHW
     ExtIoSetSrate                 
 
 ; Settings
- ;   ExtIoGetSetting            
- ;   ExtIoSetSetting               
+    ExtIoGetSetting            
+    ExtIoSetSetting               
 
  ;  GetAttenuators               
  ;  GetActualAttIdx               
@@ -35,4 +35,7 @@ StopHW
 ; 64 Bit
     SetHWLO64 
     GetHWLO64
-            
+;TX Support
+ ActivateTx
+ ModeChanged
+ SetModeRxTx           

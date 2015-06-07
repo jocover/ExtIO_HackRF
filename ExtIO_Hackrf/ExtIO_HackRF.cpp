@@ -168,7 +168,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMIN, FALSE, 0);
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMAX, FALSE, 40);
-						   for (int i = 0; i < 40; i +=8){
+						   for (int i = 0; i < 40; i += 8){
 							   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETTIC, FALSE, i);
 						   }
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETPOS, TRUE, (int)lna_gain);
@@ -178,7 +178,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMAX, FALSE, 62);
 						   for (int i = 0; i < 62; i += 2){
 							   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETTIC, FALSE, i);
-							  
+
 						   }
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETPOS, TRUE, (int)vga_gain);
 
@@ -191,9 +191,9 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 					lna_gain = SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07;
 					_itow_s(lna_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
-					if (device){ 
+					if (device){
 						if (hackrf_set_lna_gain(device, lna_gain) == HACKRF_SUCCESS) Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
-					
+
 					};
 				}
 			}
@@ -206,7 +206,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 					_itow_s(vga_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
 					Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);
-					if (device){ 
+					if (device){
 						if (hackrf_set_vga_gain(device, vga_gain) == HACKRF_SUCCESS)Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);;
 					}
 				}
@@ -582,4 +582,23 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 		break;
 
 	}
+}
+
+extern "C"
+int EXTIO_API ActivateTx(int magicA, int magicB){
+
+	if (magicA != -1 || magicB != -1){
+		//code from ExtIO_Si570.dll
+		pfnCallback((magicA ^ 0xA85EF5E1) + magicB + 0x6D276F, (magicB ^ 0x57A10A1E) + magicA + 0x3F5005D, 0.0, 0);
+	}
+	return 0;
+}
+
+extern "C"
+void ModeChanged(char mode){
+
+}
+extern "C"
+int EXTIO_API SetModeRxTx(int modeRxTx){
+	return 0;
 }
