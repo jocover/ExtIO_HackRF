@@ -9,6 +9,7 @@
 #include <hackrf.h>
 #include <new>
 #include <pthread.h>
+#include <TCHAR.h>
 
 //---------------------------------------------------------------------------
 #define EXTIO_EXPORTS		1
@@ -48,6 +49,10 @@ pfnExtIOCallback	pfnCallback = NULL;
 volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbThreadRunning = false;
+pthread_t bandwidth_thread;
+volatile bool do_exit = false;
+clock_t time_start, time_now;
+volatile uint32_t byte_count = 0;
 unsigned int lna_gain = 8, vga_gain = 20;
 
 uint8_t board_id = BOARD_ID_INVALID;
@@ -63,9 +68,10 @@ static int  SDR_ver_major = -1;
 static int  SDR_ver_minor = -1;
 
 
+
 int hackrf_rx_callback(hackrf_transfer* transfer){
 
-
+	byte_count += transfer->valid_length;
 	short *short_ptr = (short*)&short_buf[0];
 	unsigned char* char_ptr = transfer->buffer;
 
@@ -79,7 +85,26 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 		pfnCallback(buffer_len, 0, 0, (void*)short_buf);
 
 	}
+
 	return 0;
+}
+
+
+static void* bandwidthtest(void* arg){
+	while ((hackrf_is_streaming(device) == HACKRF_TRUE) && do_exit == false){
+		uint32_t byte_count_now;
+		float  rate;
+		Sleep(1000);
+		time_now = clock();
+		byte_count_now = byte_count;
+		byte_count = 0;
+		rate = (float)byte_count_now / (time_now - time_start);
+		_stprintf(str, _T("%4.1f"), rate / 1000);
+		wcscat(str, TEXT(" MiB/s"));
+		Static_SetText(GetDlgItem(h_dialog, IDC_BANDWIDTH), str);
+		time_start = time_now;
+	}
+	return NULL;
 }
 
 
@@ -311,7 +336,9 @@ bool EXTIO_API OpenHW(void)
 		delete short_buf;
 		return FALSE;
 	}
+	time_start = clock();
 	while (!hackrf_is_streaming(device));
+	pthread_create(&bandwidth_thread, NULL, bandwidthtest, NULL);
 
 	return TRUE;
 }
@@ -355,6 +382,7 @@ int  EXTIO_API StartHW(long LOfreq)
 extern "C"
 int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 {
+
 	if (!device) {
 
 		MessageBox(NULL, TEXT("StartHW Failed"), NULL, MB_OK);
@@ -370,6 +398,7 @@ int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 	SetHWLO64(glLOfreq);
 
 	gbThreadRunning = TRUE;
+
 
 
 	// number of complex elements returned each
@@ -390,10 +419,11 @@ void EXTIO_API StopHW(void)
 extern "C"
 void EXTIO_API CloseHW(void)
 {
-
+	do_exit = true;
 	hackrf_stop_rx(device);
 	hackrf_close(device);
 	hackrf_exit();
+	pthread_detach(bandwidth_thread);
 	delete short_buf;
 }
 //--------------
