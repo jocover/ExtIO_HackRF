@@ -1,8 +1,4 @@
-﻿
-
-
-
-#include "ExtIO_HackRF.h"
+﻿#include "ExtIO_HackRF.h"
 #include "resource.h"
 //---------------------------------------------------------------------------
 // #define WIN32_LEAN_AND_MEAN             // Selten verwendete Teile der Windows-Header nicht einbinden.
@@ -61,12 +57,10 @@ uint8_t board_id = BOARD_ID_INVALID;
 int_fast16_t i;
 #pragma warning(disable : 4996)
 
-
+wchar_t str[10];
 static char SDR_progname[32 + 1] = "\0";
 static int  SDR_ver_major = -1;
 static int  SDR_ver_minor = -1;
-
-
 
 
 int hackrf_rx_callback(hackrf_transfer* transfer){
@@ -174,10 +168,18 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMIN, FALSE, 0);
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETRANGEMAX, FALSE, 40);
+						   for (int i = 0; i < 40; i +=8){
+							   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETTIC, FALSE, i);
+						   }
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETPOS, TRUE, (int)lna_gain);
+
 
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMIN, FALSE, 0);
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMAX, FALSE, 62);
+						   for (int i = 0; i < 62; i += 2){
+							   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETTIC, FALSE, i);
+							  
+						   }
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETPOS, TRUE, (int)vga_gain);
 
 						   return TRUE;
@@ -187,24 +189,26 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 			if (LOWORD(wParam) != TB_THUMBTRACK && LOWORD(wParam) != TB_ENDTRACK){
 				if (lna_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07)){
 					lna_gain = SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07;
-					wchar_t str[10];
 					_itow_s(lna_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
-					Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
-					if (device)hackrf_set_lna_gain(device, lna_gain);
+					if (device){ 
+						if (hackrf_set_lna_gain(device, lna_gain) == HACKRF_SUCCESS) Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
+					
+					};
 				}
 			}
 		}
 		if (GetDlgItem(hwndDlg, IDC_VGA) == (HWND)lParam){
 			if (LOWORD(wParam) != TB_THUMBTRACK && LOWORD(wParam) != TB_ENDTRACK)
 			{
-				if (vga_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07)){
+				if (vga_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x01)){
 					vga_gain = SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_GETPOS, 0, NULL)& ~0x01;
-					wchar_t str[10];
 					_itow_s(vga_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
 					Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);
-					if (device)hackrf_set_lna_gain(device, vga_gain);
+					if (device){ 
+						if (hackrf_set_vga_gain(device, vga_gain) == HACKRF_SUCCESS)Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);;
+					}
 				}
 			}
 		}
@@ -234,9 +238,6 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 		break;
 	case WM_DESTROY:
 		h_dialog = NULL;
-		return TRUE;
-		break;
-	case WM_CTLCOLORSTATIC:
 		return TRUE;
 		break;
 	}
@@ -295,6 +296,7 @@ bool EXTIO_API OpenHW(void)
 		MessageBox(NULL, TEXT("hackrf_set_sample_rate_manual Failed"), NULL, MB_OK);
 		return FALSE;
 	}
+
 	h_dialog = CreateDialog(hInst, MAKEINTRESOURCE(IDD_HACKRF_SETTINGS), NULL, (DLGPROC)MainDlgProc);
 	ShowWindow(h_dialog, SW_HIDE);
 
@@ -507,34 +509,6 @@ void EXTIO_API VersionInfo(const char * progname, int ver_major, int ver_minor)
 	}
 }
 
-//---------------------------------------------------------------------------
-//extern "C"
-//int EXTIO_API GetAttenuators(int atten_idx, float * attenuation)
-//{
-//	// fill in attenuation
-//	// use positive attenuation levels if signal is amplified (LNA)
-//	// use negative attenuation levels if signal is attenuated
-//	// sort by attenuation: use idx 0 for highest attenuation / most damping
-//	// this functions is called with incrementing idx
-//	//    - until this functions return != 0 for no more attenuator setting
-//
-//	//MessageBox(NULL, TEXT("GetAttenuators"), NULL, MB_OK);TODO
-//	return 0;
-//}
-//
-//extern "C"
-//int EXTIO_API GetActualAttIdx(void)
-//{
-////	MessageBox(NULL, TEXT("GetActualAttIdx"), NULL, MB_OK);
-//	return 0;	// returns -1 on error
-//}
-//
-//extern "C"
-//int EXTIO_API SetAttenuator(int atten_idx)
-//{
-//	MessageBox(NULL, TEXT("SetAttenuator"), NULL, MB_OK);
-//	return 0;
-//}
 
 //---------------------------------------------------------------------------
 

@@ -24,9 +24,9 @@ StopHW
  ;   ExtIoGetSetting            
  ;   ExtIoSetSetting               
 
-;    GetAttenuators               
-;    GetActualAttIdx               
-;    SetAttenuator                 
+ ;  GetAttenuators               
+ ;  GetActualAttIdx               
+ ;   SetAttenuator                 
 	
 ;	ExtIoGetAGCs                
 ;	ExtIoGetActualAGCidx		  
