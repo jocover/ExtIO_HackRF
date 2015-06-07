@@ -39,17 +39,17 @@ typedef struct sr {
 } sr_t;
 
 static sr_t samplerates[] = {
-	{ 8000000, TEXT("8 Mbps") },
-	{ 10000000, TEXT("10 Mbps") },
-	{ 12500000, TEXT("12.5 Mbps") },
-	{ 16000000, TEXT("16 Mbps") },
-	{ 20000000, TEXT("20 Mbps") }
+	{ 8000000, TEXT("8 MSPS") },
+	{ 10000000, TEXT("10 MSPS") },
+	{ 12500000, TEXT("12.5 MSPS") },
+	{ 16000000, TEXT("16 MSPS") },
+	{ 20000000, TEXT("20 MSPS") }
 };
 
-static int samplerate_default = 1; // 10 Mbps
+static int samplerate_default = 1; // 10 MSPS
 
 pfnExtIOCallback	pfnCallback = NULL;
-volatile long gExtSampleRate = 10000000;//Default 10Mbps
+volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbThreadRunning = false;
 unsigned int lna_gain = 8, vga_gain = 20;
@@ -359,9 +359,6 @@ int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 		return -1;
 
 	}
-
-
-
 
 	if (short_buf == 0) {
 		MessageBox(NULL, TEXT("Couldn't Allocate Buffer!"), TEXT("Error!"), MB_OK | MB_ICONERROR);
