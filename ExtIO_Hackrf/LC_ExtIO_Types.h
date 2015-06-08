@@ -149,8 +149,8 @@ typedef double  (__stdcall * pfnExtIoGetAdcSrate) ( void );
 // value max 1024 char
 // these functions are called with incrementing idx: 0, 1, ...
 // until ExtIoGetSetting() returns != 0, which means that all settings are already delivered
-typedef int     (__stdcall * pfnExtIoGetSetting) ( int idx, char * description, char * value ); // will be called (at least) before exiting application
-typedef void    (__stdcall * pfnExtIoSetSetting) ( int idx, const char * value ); // before calling InitHW() !!!
+typedef int     (__stdcall * pfnExtIoGetSetting) ( int idx, char * description, char * value ); // will e called (at least) before exiting application
+typedef void    (__stdcall * pfnExtIoSetSetting) ( int idx, const char * value ); // before calling InitbHW() !!!
   // there will be an extra call with idx = -1, if theses functions are supported by the SDR app
   // suggestion: use index 0 as ExtIO identifier (save/check ExtIO name) to allow fast skipping of all following SetSetting calls
   //   when this identifier does not match

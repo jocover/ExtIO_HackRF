@@ -45,7 +45,7 @@ static sr_t samplerates[] = {
 
 static int samplerate_default = 1; // 10 MSPS
 
-pfnExtIOCallback	pfnCallback = NULL;
+pfnExtIOCallback	Callback = NULL;
 volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbThreadRunning = false;
@@ -56,11 +56,6 @@ volatile uint32_t byte_count = 0;
 unsigned int lna_gain = 8, vga_gain = 20;
 
 uint8_t board_id = BOARD_ID_INVALID;
-
-
-#define BORLAND				0
-int_fast16_t i;
-#pragma warning(disable : 4996)
 
 wchar_t str[10];
 static char SDR_progname[32 + 1] = "\0";
@@ -82,7 +77,7 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 			char_ptr++;
 			short_ptr++;
 		}
-		pfnCallback(buffer_len, 0, 0, (void*)short_buf);
+		Callback(buffer_len, 0, 0, (void*)short_buf);
 
 	}
 
@@ -246,7 +241,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 								{
 									gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
 									hackrf_set_sample_rate(device, gExtSampleRate);
-									pfnCallback(-1, extHw_Changed_SampleRate, 0, NULL);
+									Callback(-1, extHw_Changed_SampleRate, 0, NULL);
 
 								}
 								return TRUE;
@@ -452,7 +447,7 @@ int64_t  EXTIO_API SetHWLO64(int64_t LOfreq)
 		glLOfreq = LOfreq;
 		result = hackrf_set_freq(device, glLOfreq);
 		if (result = HACKRF_SUCCESS){
-			pfnCallback(-1, extHw_Changed_LO, 0, NULL);
+			Callback(-1, extHw_Changed_LO, 0, NULL);
 		}
 
 		if (result != HACKRF_SUCCESS)
@@ -476,7 +471,7 @@ int  EXTIO_API GetStatus(void)
 extern "C"
 void EXTIO_API SetCallback(pfnExtIOCallback funcptr)
 {
-	pfnCallback = funcptr;
+	Callback = funcptr;
 	return;
 }
 
@@ -571,7 +566,7 @@ int  EXTIO_API ExtIoSetSrate(int srate_idx)
 		gExtSampleRate = samplerates[srate_idx].value;
 		hackrf_set_sample_rate(device, gExtSampleRate);
 		ComboBox_SetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE), srate_idx);
-		pfnCallback(-1, extHw_Changed_SampleRate, 0, NULL);// Signal application
+		Callback(-1, extHw_Changed_SampleRate, 0, NULL);// Signal application
 		return 0;
 	}
 	else
@@ -619,7 +614,7 @@ int EXTIO_API ActivateTx(int magicA, int magicB){
 
 	if (magicA != -1 || magicB != -1){
 		//code from ExtIO_Si570.dll
-		pfnCallback((magicA ^ 0xA85EF5E1) + magicB + 0x6D276F, (magicB ^ 0x57A10A1E) + magicA + 0x3F5005D, 0.0, 0);
+		Callback((magicA ^ 0xA85EF5E1) + magicB + 0x6D276F, (magicB ^ 0x57A10A1E) + magicA + 0x3F5005D, 0.0, 0);
 	}
 	return 0;
 }
