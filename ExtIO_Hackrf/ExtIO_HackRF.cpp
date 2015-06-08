@@ -50,7 +50,6 @@ volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbThreadRunning = false;
 pthread_t bandwidth_thread;
-volatile bool do_exit = false;
 clock_t time_start, time_now;
 volatile uint32_t byte_count = 0;
 unsigned int lna_gain = 8, vga_gain = 20;
@@ -85,8 +84,8 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 }
 
 
-static void* bandwidthtest(void* arg){
-	while ((hackrf_is_streaming(device) == HACKRF_TRUE) && do_exit == false){
+static void* usb_bandwidth(void* arg){
+	while (hackrf_is_streaming(device) == HACKRF_TRUE){
 		uint32_t byte_count_now;
 		float  rate;
 		Sleep(1000);
@@ -211,8 +210,11 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 					lna_gain = SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x07;
 					_itow_s(lna_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
-					if (device){
-						if (hackrf_set_lna_gain(device, lna_gain) == HACKRF_SUCCESS) Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
+					if (device != NULL){
+						if (hackrf_set_lna_gain(device, lna_gain) == HACKRF_SUCCESS) {
+							Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
+							Callback(-1, extHw_Changed_ATT, 0, NULL);
+						}
 
 					};
 				}
@@ -225,9 +227,8 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 					vga_gain = SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_GETPOS, 0, NULL)& ~0x01;
 					_itow_s(vga_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
-					Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);
-					if (device){
-						if (hackrf_set_vga_gain(device, vga_gain) == HACKRF_SUCCESS)Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);;
+					if (device != NULL){
+						if (hackrf_set_vga_gain(device, vga_gain) == HACKRF_SUCCESS)Static_SetText(GetDlgItem(hwndDlg, IDC_VGAVALUE), str);
 					}
 				}
 			}
@@ -242,7 +243,6 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 									gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
 									hackrf_set_sample_rate(device, gExtSampleRate);
 									Callback(-1, extHw_Changed_SampleRate, 0, NULL);
-
 								}
 								return TRUE;
 		}
@@ -333,7 +333,7 @@ bool EXTIO_API OpenHW(void)
 	}
 	time_start = clock();
 	while (!hackrf_is_streaming(device));
-	pthread_create(&bandwidth_thread, NULL, bandwidthtest, NULL);
+	pthread_create(&bandwidth_thread, NULL, usb_bandwidth, NULL);
 
 	return TRUE;
 }
@@ -378,7 +378,7 @@ extern "C"
 int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 {
 
-	if (!device) {
+	if (device==NULL) {
 
 		MessageBox(NULL, TEXT("StartHW Failed"), NULL, MB_OK);
 		return -1;
@@ -414,11 +414,12 @@ void EXTIO_API StopHW(void)
 extern "C"
 void EXTIO_API CloseHW(void)
 {
-	do_exit = true;
+
 	hackrf_stop_rx(device);
 	hackrf_close(device);
-	hackrf_exit();
-	pthread_detach(bandwidth_thread);
+	hackrf_exit();	
+	if (h_dialog != NULL)
+		DestroyWindow(h_dialog);
 	delete short_buf;
 }
 //--------------
@@ -537,6 +538,58 @@ void EXTIO_API VersionInfo(const char * progname, int ver_major, int ver_minor)
 
 //---------------------------------------------------------------------------
 
+
+extern "C"
+int EXTIO_API GetAttenuators(int atten_idx, float * attenuation)
+{
+	// fill in attenuation
+	// use positive attenuation levels if signal is amplified (LNA)
+	// use negative attenuation levels if signal is attenuated
+	// sort by attenuation: use idx 0 for highest attenuation / most damping
+	// this functions is called with incrementing idx
+	//    - until this functions return != 0 for no more attenuator setting
+
+	switch (atten_idx)
+	{
+	case 0:		*attenuation = 0.0F;	return 0;
+	case 1:		*attenuation = 8.0F;	return 0;
+	case 2:		*attenuation = 16.0F;	return 0;
+	case 3:		*attenuation = 24.0F;	return 0;
+	case 4:		*attenuation = 32.0F;	return 0;
+	case 5:		*attenuation = 40.0F;	return 0;
+	default:	return 1;
+	}
+	return 1;
+}
+
+extern "C"
+int EXTIO_API GetActualAttIdx(void)
+{
+
+	return lna_gain / 8;	// returns -1 on error
+}
+
+extern "C"
+int EXTIO_API SetAttenuator(int atten_idx)
+{
+	if (device != NULL){
+		if (lna_gain != atten_idx * 8){
+			lna_gain = atten_idx * 8;
+			if (hackrf_set_lna_gain(device, lna_gain) == HACKRF_SUCCESS){
+				_itow_s(lna_gain, str, 10, 10);
+				wcscat(str, TEXT(" dB"));
+				SendDlgItemMessage(h_dialog, IDC_LNA, TBM_SETPOS, TRUE, (int)lna_gain);
+				Static_SetText(GetDlgItem(h_dialog, IDC_LNAVALUE), str);
+				return 0;
+			};
+		}
+		return 1;
+	}
+	return 1;	// ERROR
+}
+
+//---------------------------------------------------------------------------
+
 extern "C"
 int EXTIO_API ExtIoGetSrates(int srate_idx, double * samplerate)
 {
@@ -586,6 +639,10 @@ int  EXTIO_API ExtIoGetSetting(int idx, char * description, char * value)
 	case 0:	_snprintf(description, 1024, "%s", "SampleRateIdx");
 		_snprintf(value, 1024, "%d", ComboBox_GetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE)));
 		return 0;
+	case 1:	{_snprintf(description, 1024, "%s", "LNA_Gain");
+		_snprintf(value, 1024, "%d", SendMessage(GetDlgItem(h_dialog, IDC_LNA), TBM_GETPOS, (WPARAM)0, (LPARAM)0));
+		return 0;
+	}
 	default:	return -1;	// ERROR
 	}
 	return -1;	// ERROR
@@ -598,14 +655,18 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 
 	switch (idx)
 	{
-	case 0:
-		tempInt = atoi(value);
-		if (tempInt >= 0 && tempInt < (sizeof(samplerates) / sizeof(samplerates[0])))
-		{
-			samplerate_default = tempInt;
-		}
-		break;
-
+	case 0:{
+			   tempInt = atoi(value);
+			   if (tempInt >= 0 && tempInt < (sizeof(samplerates) / sizeof(samplerates[0])))
+			   {
+				   samplerate_default = tempInt;
+			   }
+			   break;
+	}
+	case 1:	{tempInt = atoi(value);
+			lna_gain = tempInt& ~0x07;
+			break;
+			}
 	}
 }
 
