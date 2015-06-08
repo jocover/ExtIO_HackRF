@@ -36,6 +36,8 @@ typedef struct sr {
 } sr_t;
 
 static sr_t samplerates[] = {
+	{ 2000000, TEXT("2 MSPS") },
+	{ 4000000, TEXT("4 MSPS") },
 	{ 8000000, TEXT("8 MSPS") },
 	{ 10000000, TEXT("10 MSPS") },
 	{ 12500000, TEXT("12.5 MSPS") },
@@ -43,7 +45,7 @@ static sr_t samplerates[] = {
 	{ 20000000, TEXT("20 MSPS") }
 };
 
-static int samplerate_default = 1; // 10 MSPS
+static int samplerate_default = 3; // 10 MSPS
 
 pfnExtIOCallback	Callback = NULL;
 volatile long gExtSampleRate = 10000000;//Default 10MSPS
@@ -643,6 +645,10 @@ int  EXTIO_API ExtIoGetSetting(int idx, char * description, char * value)
 		_snprintf(value, 1024, "%d", SendMessage(GetDlgItem(h_dialog, IDC_LNA), TBM_GETPOS, (WPARAM)0, (LPARAM)0));
 		return 0;
 	}
+	case 2:	{_snprintf(description, 1024, "%s", "VGA_Gain");
+		_snprintf(value, 1024, "%d", SendMessage(GetDlgItem(h_dialog, IDC_VGA), TBM_GETPOS, (WPARAM)0, (LPARAM)0));
+		return 0;
+	}
 	default:	return -1;	// ERROR
 	}
 	return -1;	// ERROR
@@ -667,6 +673,10 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 			lna_gain = tempInt& ~0x07;
 			break;
 			}
+	case 2:	{tempInt = atoi(value);
+		vga_gain = tempInt& ~0x01;
+		break;
+	}
 	}
 }
 
