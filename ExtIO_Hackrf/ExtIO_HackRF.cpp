@@ -51,6 +51,7 @@ pfnExtIOCallback	Callback = NULL;
 volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbThreadRunning = false;
+int amp = 0;
 pthread_t bandwidth_thread;
 clock_t time_start, time_now;
 volatile uint32_t byte_count = 0;
@@ -203,6 +204,8 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 						   }
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETPOS, TRUE, (int)vga_gain);
 
+						   Button_SetCheck(GetDlgItem(hwndDlg, IDC_AMP), amp ? BST_CHECKED : BST_UNCHECKED);
+
 						   return TRUE;
 	}
 	case WM_HSCROLL:
@@ -248,7 +251,20 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 								}
 								return TRUE;
 		}
-
+		case IDC_AMP:
+		{
+						if (Button_GetCheck(GET_WM_COMMAND_HWND(wParam, lParam)) == BST_CHECKED) //it is checked
+						{
+							amp = 1;
+							hackrf_set_amp_enable(device, amp);
+						}
+						else //it has been unchecked
+						{
+							amp = 0;
+							hackrf_set_amp_enable(device, amp);
+						}
+						return TRUE;
+		}
 
 		}
 		break;
@@ -327,6 +343,7 @@ bool EXTIO_API OpenHW(void)
 
 	result = hackrf_set_lna_gain(device, lna_gain);
 	result |= hackrf_set_vga_gain(device, vga_gain);
+	result |= hackrf_set_amp_enable(device, amp);
 	result |= hackrf_start_rx(device, hackrf_rx_callback, NULL);
 	if (result != HACKRF_SUCCESS) {
 		MessageBox(NULL, TEXT("hackrf_start_rx Failed"), NULL, MB_OK);
@@ -380,7 +397,7 @@ extern "C"
 int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 {
 
-	if (device==NULL) {
+	if (device == NULL) {
 
 		MessageBox(NULL, TEXT("StartHW Failed"), NULL, MB_OK);
 		return -1;
@@ -419,7 +436,7 @@ void EXTIO_API CloseHW(void)
 
 	hackrf_stop_rx(device);
 	hackrf_close(device);
-	hackrf_exit();	
+	hackrf_exit();
 	if (h_dialog != NULL)
 		DestroyWindow(h_dialog);
 	delete short_buf;
@@ -649,6 +666,10 @@ int  EXTIO_API ExtIoGetSetting(int idx, char * description, char * value)
 		_snprintf(value, 1024, "%d", SendMessage(GetDlgItem(h_dialog, IDC_VGA), TBM_GETPOS, (WPARAM)0, (LPARAM)0));
 		return 0;
 	}
+	case 3:	{_snprintf(description, 1024, "%s", "APM");
+		_snprintf(value, 1024, "%d", Button_GetCheck(GetDlgItem(h_dialog, IDC_AMP)) == BST_CHECKED ? 1 : 0);
+		return 0;
+	}
 	default:	return -1;	// ERROR
 	}
 	return -1;	// ERROR
@@ -670,11 +691,15 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 			   break;
 	}
 	case 1:	{tempInt = atoi(value);
-			lna_gain = tempInt& ~0x07;
-			break;
-			}
+		lna_gain = tempInt& ~0x07;
+		break;
+	}
 	case 2:	{tempInt = atoi(value);
 		vga_gain = tempInt& ~0x01;
+		break;
+	}
+	case 3:	{tempInt = atoi(value);
+		amp = tempInt;
 		break;
 	}
 	}
