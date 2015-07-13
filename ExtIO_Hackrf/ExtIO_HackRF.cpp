@@ -7,15 +7,15 @@
 #include <commctrl.h>
 #include <stdio.h>
 #include <hackrf.h>
+#include <time.h>
 #include <new>
-#include <pthread.h>
 #include <TCHAR.h>
 
 
 //---------------------------------------------------------------------------
 #define EXTIO_EXPORTS		1
 #define HWNAME				"ExtIO HackRF"
-
+typedef long clock_t;
 static hackrf_device *device;
 HWND h_dialog = NULL;
 int result;
@@ -52,7 +52,7 @@ volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
 volatile bool	gbStartHW = false;
 volatile bool gbExit = false;
 int amp = 0;
-pthread_t bandwidth_thread;
+HANDLE bandwidth_thread;
 clock_t time_start, time_now;
 volatile uint32_t byte_count = 0;
 unsigned int lna_gain = 16, vga_gain = 8;
@@ -86,7 +86,7 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 }
 
 
-static void* usb_bandwidth(void* arg){
+DWORD WINAPI usb_bandwidth(void* arg){
 	while (!gbExit){
 		uint32_t byte_count_now;
 		float  rate;
@@ -145,28 +145,10 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 	case DLL_PROCESS_ATTACH:
 		hInst = hModule;
-#if PTW32_STATIC_LIB
-		pthread_win32_process_attach_np();
-#endif
 	case DLL_THREAD_ATTACH:
-#if PTW32_STATIC_LIB
-		pthread_win32_thread_attach_np();
-#endif
-		break;
-
 	case DLL_THREAD_DETACH:
-#if PTW32_STATIC_LIB
-		pthread_win32_thread_detach_np();
-#endif
-		break;
-
 	case DLL_PROCESS_DETACH:
-#if PTW32_STATIC_LIB
-		pthread_win32_thread_detach_np();
-		pthread_win32_process_detach_np();
-#endif
 		break;
-
 
 	}
 	return TRUE;
@@ -347,8 +329,8 @@ bool EXTIO_API OpenHW(void)
 		return FALSE;
 	}
 	while (!hackrf_is_streaming(device));
-	pthread_create(&bandwidth_thread, NULL, usb_bandwidth, NULL);
-
+//	pthread_create(&bandwidth_thread, NULL, usb_bandwidth, NULL);
+	bandwidth_thread=CreateThread(NULL, 0, usb_bandwidth, NULL, 0, 0);
 	return TRUE;
 }
 //
@@ -429,6 +411,7 @@ extern "C"
 void EXTIO_API CloseHW(void)
 {
 	gbExit = true;
+	CloseHandle(bandwidth_thread);
 	if (device != NULL){
 	hackrf_close(device);
 	hackrf_exit();
