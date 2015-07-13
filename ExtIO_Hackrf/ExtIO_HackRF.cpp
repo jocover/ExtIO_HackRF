@@ -16,7 +16,7 @@
 #define EXTIO_EXPORTS		1
 #define HWNAME				"ExtIO HackRF"
 
-hackrf_device *device=NULL;
+static hackrf_device *device;
 HWND h_dialog = NULL;
 int result;
 short *short_buf = NULL;
@@ -245,8 +245,8 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 								if (GET_WM_COMMAND_CMD(wParam, lParam) == CBN_SELCHANGE)
 								{
 									gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
-									hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 									hackrf_set_sample_rate(device, gExtSampleRate);
+									hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 									Callback(-1, extHw_Changed_SampleRate, 0, NULL);
 								}
 								return TRUE;
@@ -324,8 +324,8 @@ bool EXTIO_API OpenHW(void)
 {
 
 	gExtSampleRate = samplerates[samplerate_default].value;
-	hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 	result = hackrf_set_sample_rate(device, gExtSampleRate);
+	result |= hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 	if (result != HACKRF_SUCCESS) {
 		MessageBox(NULL, TEXT("hackrf_set_sample_rate_manual Failed"), NULL, MB_OK);
 		return FALSE;
@@ -632,8 +632,8 @@ int  EXTIO_API ExtIoSetSrate(int srate_idx)
 	if (srate_idx >= 0 && srate_idx < (sizeof(samplerates) / sizeof(samplerates[0])))
 	{
 		gExtSampleRate = samplerates[srate_idx].value;
-		hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 		hackrf_set_sample_rate(device, gExtSampleRate);
+		hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);		
 		ComboBox_SetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE), srate_idx);
 		Callback(-1, extHw_Changed_SampleRate, 0, NULL);// Signal application
 		return 0;
