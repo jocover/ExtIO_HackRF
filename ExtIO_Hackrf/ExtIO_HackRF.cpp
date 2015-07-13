@@ -11,18 +11,17 @@
 #include <pthread.h>
 #include <TCHAR.h>
 
+
 //---------------------------------------------------------------------------
 #define EXTIO_EXPORTS		1
 #define HWNAME				"ExtIO HackRF"
 
-static hackrf_device *device;
+hackrf_device *device=NULL;
 HWND h_dialog = NULL;
 int result;
 short *short_buf = NULL;
 static int buffer_len;
-#define DEFAULT_BUF_LENGTH		262144
-#define MAXIMUM_OVERSAMPLE		1	
-#define BUF_LEN  (MAXIMUM_OVERSAMPLE * DEFAULT_BUF_LENGTH) /* must be multiple of 512 */
+#define BUF_LEN  262144 /* must be multiple of 512 */
 #define BYTES_PER_SAMPLE  2 /* HackRF device produces 8 bit signed IQ data */
 
 #define EXT_HWTYPE			exthwUSBdata16
@@ -50,14 +49,16 @@ static int samplerate_default = 3; // 10 MSPS
 pfnExtIOCallback	Callback = NULL;
 volatile long gExtSampleRate = 10000000;//Default 10MSPS
 volatile int64_t	glLOfreq = 101700000L;//Default 101.7Mhz
-volatile bool	gbThreadRunning = false;
+volatile bool	gbStartHW = false;
+volatile bool gbExit = false;
 int amp = 0;
 pthread_t bandwidth_thread;
 clock_t time_start, time_now;
 volatile uint32_t byte_count = 0;
-unsigned int lna_gain = 8, vga_gain = 20;
+unsigned int lna_gain = 16, vga_gain = 8;
 
 uint8_t board_id = BOARD_ID_INVALID;
+
 
 wchar_t str[10];
 static char SDR_progname[32 + 1] = "\0";
@@ -69,17 +70,15 @@ static int  SDR_ver_minor = -1;
 int hackrf_rx_callback(hackrf_transfer* transfer){
 
 	byte_count += transfer->valid_length;
-	short *short_ptr = (short*)&short_buf[0];
-	unsigned char* char_ptr = transfer->buffer;
 
-	if (gbThreadRunning){
+	if (gbStartHW){
 		for (int i = 0; i < transfer->valid_length; i++)
 		{
-			(*short_ptr) = ((short)(*char_ptr)) << 8;
-			char_ptr++;
-			short_ptr++;
+			short_buf[i] = (short)(transfer->buffer[i] << 8);
+
 		}
 		Callback(buffer_len, 0, 0, (void*)short_buf);
+
 
 	}
 
@@ -88,7 +87,7 @@ int hackrf_rx_callback(hackrf_transfer* transfer){
 
 
 static void* usb_bandwidth(void* arg){
-	while (hackrf_is_streaming(device) == HACKRF_TRUE){
+	while (!gbExit){
 		uint32_t byte_count_now;
 		float  rate;
 		Sleep(1000);
@@ -246,6 +245,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 								if (GET_WM_COMMAND_CMD(wParam, lParam) == CBN_SELCHANGE)
 								{
 									gExtSampleRate = samplerates[ComboBox_GetCurSel(GET_WM_COMMAND_HWND(wParam, lParam))].value;
+									hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 									hackrf_set_sample_rate(device, gExtSampleRate);
 									Callback(-1, extHw_Changed_SampleRate, 0, NULL);
 								}
@@ -313,7 +313,7 @@ bool __declspec(dllexport) __stdcall InitHW(char *name, char *model, int& type)
 	type = EXT_HWTYPE;
 	strcpy(name, HWNAME);
 	strcpy(model, hackrf_board_id_name((hackrf_board_id)board_id));
-	hackrf_close(device);
+
 	return TRUE;
 
 }
@@ -323,12 +323,8 @@ extern "C"
 bool EXTIO_API OpenHW(void)
 {
 
-	result = hackrf_open(&device);
-	if (result != HACKRF_SUCCESS) {
-		MessageBox(NULL, TEXT("hackrf_open Faile"), NULL, MB_OK);
-		return FALSE;
-	}
 	gExtSampleRate = samplerates[samplerate_default].value;
+	hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 	result = hackrf_set_sample_rate(device, gExtSampleRate);
 	if (result != HACKRF_SUCCESS) {
 		MessageBox(NULL, TEXT("hackrf_set_sample_rate_manual Failed"), NULL, MB_OK);
@@ -350,7 +346,6 @@ bool EXTIO_API OpenHW(void)
 		delete short_buf;
 		return FALSE;
 	}
-	time_start = clock();
 	while (!hackrf_is_streaming(device));
 	pthread_create(&bandwidth_thread, NULL, usb_bandwidth, NULL);
 
@@ -411,7 +406,7 @@ int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 	glLOfreq = LOfreq;
 	SetHWLO64(glLOfreq);
 
-	gbThreadRunning = TRUE;
+	gbStartHW = TRUE;
 
 
 
@@ -425,7 +420,7 @@ int64_t  EXTIO_API StartHW64(int64_t LOfreq)
 extern "C"
 void EXTIO_API StopHW(void)
 {
-	gbThreadRunning = FALSE;
+	gbStartHW = FALSE;
 
 }
 
@@ -433,10 +428,11 @@ void EXTIO_API StopHW(void)
 extern "C"
 void EXTIO_API CloseHW(void)
 {
-
-	hackrf_stop_rx(device);
+	gbExit = true;
+	if (device != NULL){
 	hackrf_close(device);
 	hackrf_exit();
+}
 	if (h_dialog != NULL)
 		DestroyWindow(h_dialog);
 	delete short_buf;
@@ -636,6 +632,7 @@ int  EXTIO_API ExtIoSetSrate(int srate_idx)
 	if (srate_idx >= 0 && srate_idx < (sizeof(samplerates) / sizeof(samplerates[0])))
 	{
 		gExtSampleRate = samplerates[srate_idx].value;
+		hackrf_set_baseband_filter_bandwidth(device, gExtSampleRate);
 		hackrf_set_sample_rate(device, gExtSampleRate);
 		ComboBox_SetCurSel(GetDlgItem(h_dialog, IDC_SAMPLERATE), srate_idx);
 		Callback(-1, extHw_Changed_SampleRate, 0, NULL);// Signal application
