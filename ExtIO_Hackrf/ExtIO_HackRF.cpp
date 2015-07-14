@@ -329,11 +329,9 @@ bool EXTIO_API OpenHW(void)
 		return FALSE;
 	}
 	while (!hackrf_is_streaming(device));
-//	pthread_create(&bandwidth_thread, NULL, usb_bandwidth, NULL);
 	bandwidth_thread=CreateThread(NULL, 0, usb_bandwidth, NULL, 0, 0);
 	return TRUE;
 }
-//
 
 extern "C"
 void EXTIO_API ShowGUI()
