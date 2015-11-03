@@ -37,5 +37,5 @@ StopHW
     GetHWLO64
 ;TX Support
  ActivateTx
- ModeChanged
+; ModeChanged
  SetModeRxTx           
