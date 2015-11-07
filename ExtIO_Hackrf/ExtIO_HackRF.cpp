@@ -60,7 +60,7 @@ clock_t time_start, time_now;
 uint32_t byte_count = 0;
 
 typedef long clock_t;
-static hackrf_device *device;
+hackrf_device *device=nullptr;
 HWND h_dialog = NULL;
 int result;
 short *short_buf = nullptr;
@@ -171,7 +171,9 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 							   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETTIC, FALSE, i);
 						   }
 						   SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_SETPOS, TRUE, (int)lna_gain);
-
+						   _itow_s(lna_gain, str, 10, 10);
+						   wcscat(str, TEXT(" dB"));
+						   Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
 
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMIN, FALSE, 0);
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETRANGEMAX, FALSE, 62);
@@ -180,6 +182,9 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 
 						   }
 						   SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_SETPOS, TRUE, (int)vga_gain);
+						   _itow_s(vga_gain, str, 10, 10);
+						   wcscat(str, TEXT(" dB"));
+						   Static_SetText(GetDlgItem(hwndDlg, IDC_LNAVALUE), str);
 
 						   Button_SetCheck(GetDlgItem(hwndDlg, IDC_AMP), amp ? BST_CHECKED : BST_UNCHECKED);
 
@@ -205,7 +210,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 		if (GetDlgItem(hwndDlg, IDC_VGA) == (HWND)lParam){
 			if (LOWORD(wParam) != TB_THUMBTRACK && LOWORD(wParam) != TB_ENDTRACK)
 			{
-				if (vga_gain != (SendDlgItemMessage(hwndDlg, IDC_LNA, TBM_GETPOS, 0, NULL)& ~0x01)){
+				if (vga_gain != (SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_GETPOS, 0, NULL)& ~0x01)){
 					vga_gain = SendDlgItemMessage(hwndDlg, IDC_VGA, TBM_GETPOS, 0, NULL)& ~0x01;
 					_itow_s(vga_gain, str, 10, 10);
 					wcscat(str, TEXT(" dB"));
@@ -666,15 +671,18 @@ void EXTIO_API ExtIoSetSetting(int idx, const char * value)
 			   }
 			   break;
 	}
-	case 1:	{tempInt = atoi(value);
+	case 1:	{
+		tempInt = atoi(value);
 		lna_gain = tempInt& ~0x07;
 		break;
 	}
-	case 2:	{tempInt = atoi(value);
+	case 2:	{
+		tempInt = atoi(value);
 		vga_gain = tempInt& ~0x01;
 		break;
 	}
-	case 3:	{tempInt = atoi(value);
+	case 3:	{
+		tempInt = atoi(value);
 		amp = tempInt;
 		break;
 	}
